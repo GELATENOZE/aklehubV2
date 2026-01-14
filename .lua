@@ -12,21 +12,18 @@ local vu183 = game:GetService("UserInputService")
 
 local vu7 = vu2.LocalPlayer
 
--- Fly System Variables
 local FlyEnabled = false
 local FlySpeed = 16
 local FlyConnection = nil
 local flyBV = nil
 local flyBG = nil
 
--- Fly System Functions
 local function toggleFly()
     if not vu7.Character then return end
     
     FlyEnabled = not FlyEnabled
     
     if FlyEnabled then
-        -- Create BodyVelocity and BodyGyro for fly
         flyBV = Instance.new("BodyVelocity")
         flyBV.Velocity = Vector3.new(0, 0, 0)
         flyBV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
@@ -42,7 +39,6 @@ local function toggleFly()
             flyBG.Parent = humanoidRootPart
         end
         
-        -- Fly control
         FlyConnection = vu4.Heartbeat:Connect(function()
             if not FlyEnabled or not vu7.Character then
                 return
@@ -53,7 +49,6 @@ local function toggleFly()
             
             local direction = Vector3.new(0, 0, 0)
             
-            -- Forward/Backward movement (W/S)
             if vu183:IsKeyDown(Enum.KeyCode.W) then
                 direction = direction + (humanoidRootPart.CFrame.LookVector * FlySpeed)
             end
@@ -61,7 +56,6 @@ local function toggleFly()
                 direction = direction + (humanoidRootPart.CFrame.LookVector * -FlySpeed)
             end
             
-            -- Left/Right movement (A/D)
             if vu183:IsKeyDown(Enum.KeyCode.A) then
                 direction = direction + (humanoidRootPart.CFrame.RightVector * -FlySpeed)
             end
@@ -69,14 +63,11 @@ local function toggleFly()
                 direction = direction + (humanoidRootPart.CFrame.RightVector * FlySpeed)
             end
             
-            -- Set velocity (NO UP/DOWN movement - Q/E removed)
             flyBV.Velocity = direction
             
-            -- Stabilize rotation
             flyBG.CFrame = CFrame.new(humanoidRootPart.Position, humanoidRootPart.Position + humanoidRootPart.CFrame.LookVector)
         end)
     else
-        -- Remove physics objects
         if flyBV then 
             flyBV:Destroy()
             flyBV = nil
@@ -256,6 +247,8 @@ function vu38.new(p39)
     v40.autoTransferEnabled = false
     v40.transferConnection = nil
     v40.targetPlayer = nil
+    v40.originalPosition = nil
+    v40.transferDelay = 0.1
     return v40
 end
 
@@ -279,11 +272,19 @@ end
 
 function vu38.transferBomb(p45, pu46)
     if pu46 and pu46.Character then
+        if vu7.Character and vu7.Character:FindFirstChild("HumanoidRootPart") then
+            p45.originalPosition = vu7.Character.HumanoidRootPart.CFrame
+        end
+        
+        wait(p45.transferDelay)
+        
         p45:teleportToPlayer(pu46)
+        
         local v47, v48 = p45.bombDetector:hasBomb()
         if v47 then
             v48.Parent = pu46.Character
         end
+        
         spawn(function()
             local v49 = vu3
             local v50, v51, v52 = pairs(v49:GetDescendants())
@@ -328,6 +329,12 @@ function vu38.transferBomb(p45, pu46)
                 end
             end
         end)
+        
+        wait(0.01)
+        
+        if p45.originalPosition and vu7.Character and vu7.Character:FindFirstChild("HumanoidRootPart") then
+            vu7.Character.HumanoidRootPart.CFrame = p45.originalPosition
+        end
     end
 end
 
@@ -362,28 +369,54 @@ function vu38.getClosestPlayer(p61)
     return v68
 end
 
-function vu38.giveBombToClosest(p71)
-    local v72 = p71:getClosestPlayer()
-    if v72 then
-        p71:transferBomb(v72)
+function vu38.getRandomPlayer(p71)
+    local players = {}
+    local v72, v73, v74 = pairs(vu2:GetPlayers())
+    while true do
+        local v75
+        v74, v75 = v72(v73, v74)
+        if v74 == nil then
+            break
+        end
+        if v75 ~= vu7 and v75.Character and v75.Character:FindFirstChild("HumanoidRootPart") then
+            table.insert(players, v75)
+        end
+    end
+    
+    if #players > 0 then
+        return players[math.random(1, #players)]
+    end
+    return nil
+end
+
+function vu38.giveBombToClosest(p76)
+    local v77 = p76:getClosestPlayer()
+    if v77 then
+        p76:transferBomb(v77)
     end
 end
 
-function vu38.toggleAutoTransfer(pu73)
-    pu73.autoTransferEnabled = not pu73.autoTransferEnabled
-    if pu73.autoTransferEnabled then
-        pu73.transferConnection = vu4.Heartbeat:Connect(function()
-            wait(0.8)
-            if pu73.bombDetector:hasBomb() then
-                pu73:giveBombToClosest()
-                wait(1.5)
+function vu38.giveBombToRandom(p78)
+    local v79 = p78:getRandomPlayer()
+    if v79 then
+        p78:transferBomb(v79)
+    end
+end
+
+function vu38.toggleAutoTransfer(pu80)
+    pu80.autoTransferEnabled = not pu80.autoTransferEnabled
+    if pu80.autoTransferEnabled then
+        pu80.transferConnection = vu4.Heartbeat:Connect(function()
+            wait(0.1)
+            if pu80.bombDetector:hasBomb() then
+                pu80:giveBombToRandom()
             end
         end)
-    elseif pu73.transferConnection then
-        pu73.transferConnection:Disconnect()
-        pu73.transferConnection = nil
+    elseif pu80.transferConnection then
+        pu80.transferConnection:Disconnect()
+        pu80.transferConnection = nil
     end
-    return pu73.autoTransferEnabled
+    return pu80.autoTransferEnabled
 end
 
 local vu74 = {}
@@ -442,7 +475,7 @@ function vu74.createESP(p76, p77)
                     local v86 = Instance.new("SelectionBox")
                     v86.Name = "ESP_" .. v84
                     v86.Adornee = v85
-                    v86.Color3 = Color3.fromRGB(255, 0, 0)
+                    v86.Color3 = Color3.fromRGB(0, 0, 150)
                     v86.LineThickness = 0.1
                     v86.Transparency = 0.1
                     v86.Parent = vu79
@@ -768,7 +801,7 @@ function vu142.createGUI(pu146)
     local v153 = Instance.new("TextButton")
     v153.Size = UDim2.new(0.25, 0, 0.8, 0)
     v153.Position = UDim2.new(0.72, 0, 0.1, 0)
-    v153.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+    v153.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
     v153.BorderSizePixel = 0
     v153.Text = "Set Target"
     v153.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -799,28 +832,28 @@ function vu142.createGUI(pu146)
             func = function()
                 pu146.espController:toggleESP()
             end,
-            color = Color3.fromRGB(255, 100, 100)
+            color = Color3.fromRGB(50, 50, 50)
         },
         {
-            name = "Give Bomb",
+            name = "Give Bomb (target random)",
             func = function()
-                pu146.bombTransfer:giveBombToClosest()
+                pu146.bombTransfer:giveBombToRandom()
             end,
-            color = Color3.fromRGB(255, 150, 50)
+            color = Color3.fromRGB(50, 50, 50)
         },
         {
-            name = "Auto Transfer",
+            name = "Auto Transfer (work 50/50)",
             func = function()
                 pu146.bombTransfer:toggleAutoTransfer()
             end,
-            color = Color3.fromRGB(100, 255, 150)
+            color = Color3.fromRGB(50, 50, 50)
         },
         {
             name = "speed hack",
             func = function()
                 toggleFly()
             end,
-            color = Color3.fromRGB(0, 150, 255)
+            color = Color3.fromRGB(50, 50, 50)
         }
     }
     
@@ -866,9 +899,8 @@ function vu142.createGUI(pu146)
         end)
     end
     
-    -- Fly Controls Label
     local flyControlsLabel = Instance.new("TextLabel")
-    flyControlsLabel.Size = UDim2.new(0.9, 0, 0, 30)
+    flyControlsLabel.Size = UDim2.new(0.9, 0, 0, 20)
     flyControlsLabel.Position = UDim2.new(0.05, 0, 0, 310)
     flyControlsLabel.BackgroundTransparency = 1
     flyControlsLabel.Text = "speed Controls: a+w or d+w"
@@ -882,7 +914,7 @@ function vu142.createGUI(pu146)
     vu166.Position = UDim2.new(0.05, 0, 0, 380)
     vu166.BackgroundTransparency = 1
     vu166.Text = "Target: None"
-    vu166.TextColor3 = Color3.fromRGB(200, 200, 200)
+    vu166.TextColor3 = Color3.fromRGB(67, 75, 77)
     vu166.TextSize = 12
     vu166.Font = Enum.Font.Gotham
     vu166.Parent = vu147
@@ -947,6 +979,18 @@ function vu142.initialize(p170)
     p170:createGUI()
 end
 
-vu142.new():initialize()
+local mainController = vu142.new()
+mainController:initialize()
 
-local v
+local function checkForBomb()
+    while true do
+        wait(0.1)
+        local hasBomb = mainController.bombDetector:hasBomb()
+        if hasBomb and mainController.bombTransfer.autoTransferEnabled then
+            mainController.bombTransfer:giveBombToRandom()
+        end
+    end
+end
+
+spawn(checkForBomb)
+--script by gelatenoze tt:@helpbrovatafakyouduing
